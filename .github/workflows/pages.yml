@@ -1,0 +1,70 @@
+name: Deploy to GitHub Pages
+
+# This workflow only runs in the public Pages repo. The private source repo
+# carries the same file so the exporter ships it, but the job is skipped there.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'B-Gor-Team/otp-vault'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Install
+        run: npm ci
+
+      - name: Build for the project sub-path
+        env:
+          MERIDIAN_BASE: /otp-vault/
+        run: npm run build
+
+      - name: Check sub-path output
+        run: |
+          test -f dist/index.html
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          grep -q '/otp-vault/assets/' dist/index.html
+          grep -q '/otp-vault/manifest.webmanifest' dist/index.html
+          grep -q '"start_url": "./"' dist/manifest.webmanifest
+          grep -q "importScripts('./workbox-v" dist/sw.js
+          ! grep -q 'src="/assets/' dist/index.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    if: github.repository == 'B-Gor-Team/otp-vault'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

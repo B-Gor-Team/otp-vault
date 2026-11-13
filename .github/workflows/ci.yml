@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check installable PWA output
+        run: |
+          test -f dist/index.html
+          test -f dist/sw.js
+          test -f dist/manifest.webmanifest
+          test -f dist/icon-192.png
+          test -f dist/icon-512.png
+          test -f dist/icon-maskable-512.png
+          grep -q '"display": "standalone"' dist/manifest.webmanifest
+          grep -q 'Meridian' dist/manifest.webmanifest
+          grep -q 'precache' dist/sw.js
+          grep -q '"start_url": "./"' dist/manifest.webmanifest
+
+      - name: Check sub-path build
+        run: |
+          npx vite build --base=/otp-vault/ --outDir dist-pages
+          grep -q '/otp-vault/assets/' dist-pages/index.html
+          grep -q '/otp-vault/manifest.webmanifest' dist-pages/index.html
+          grep -q '"src": "icon-192.png"' dist-pages/manifest.webmanifest
+          ! grep -q 'src="/assets/' dist-pages/index.html
+          rm -rf dist-pages
